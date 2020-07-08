@@ -1,0 +1,4 @@
+
+*.DS_Store
+firmware/emonESP_DC_JUL2020/.pio/
+firmware/emonESP_DC_JUL2020/.vscode/
