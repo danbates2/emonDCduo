@@ -375,22 +375,55 @@ void handleLastValues(AsyncWebServerRequest *request) {
 // Download from SD card.
 // url: /download
 // -------------------------------------------------------------------
-bool isSendingSD = 0;
-size_t dataAvaliable;
-File SDReadFile;
+//bool isSendingSD = 0;
+//size_t dataAvaliable;
+//File SDReadFile;
 // https://github.com/me-no-dev/ESPAsyncWebServer/issues/124
-void handleDownload(AsyncWebServerRequest *request) {
-  AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
-    [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-        if(index){ //already sent
-            return 0;
-        }
-        return snprintf((char *)buffer, maxLen, "test");
-    });
-		response->addHeader("Cache-Control", "no-cache");
-		response->addHeader("Content-Disposition", "attachment; filename=" + String("datalog.csv"));
-		response->addHeader("Access-Control-Allow-Origin", "*");
-		request->send(response);
+void handleDownload(AsyncWebServerRequest *request) 
+{
+  if(SD_present)
+  {
+    File SDReadFile = SD.open(datalogFilename, FILE_READ);
+    if(SDReadFile)
+    {
+      Serial.println("Data remaining:" + String(SDReadFile.size()));
+      SDReadFile.close();
+
+      AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
+        [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
+        {
+          uint32_t bytes = 0;
+
+          File SDReadFile = SD.open(datalogFilename, FILE_READ);
+          if(SDReadFile)
+          {
+            SDReadFile.seek(index);
+      
+            size_t dataRemaining = SDReadFile.size() - SDReadFile.position();
+            Serial.println("Data remaining:" + String(dataRemaining));
+
+            uint32_t readBytes;
+
+            //waitSD();
+            if( dataRemaining > 0) {
+              bytes = SDReadFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
+            }
+            //leaveSD();
+
+            SDReadFile.close();
+          }
+          return bytes;
+        });
+
+      response->addHeader("Content-Disposition", "attachment; filename=" + String("datalog.csv"));
+      response->addHeader("Access-Control-Allow-Origin", "*");
+      request->send(response);
+    } else {
+      request->send(500, "text/plain", "Could not open " + datalogFilename);
+    }
+  } else {
+    request->send(500, "text/plain", "SD not found");
+  }
 }
 
 
