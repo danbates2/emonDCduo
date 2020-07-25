@@ -375,26 +375,25 @@ void handleLastValues(AsyncWebServerRequest *request) {
 // Download from SD card.
 // url: /download
 // -------------------------------------------------------------------
-//bool isSendingSD = 0;
-//size_t dataAvaliable;
-//File SDReadFile;
+bool isSendingSD = false;
+File SDReadFile;
 // https://github.com/me-no-dev/ESPAsyncWebServer/issues/124
 void handleDownload(AsyncWebServerRequest *request) 
 {
-  if(SD_present)
+  if(SD_present && !isSendingSD)
   {
-    File SDReadFile = SD.open(datalogFilename, FILE_READ);
+    SDReadFile = SD.open(datalogFilename, FILE_READ);
     if(SDReadFile)
     {
       Serial.println("Data remaining:" + String(SDReadFile.size()));
-      SDReadFile.close();
+      isSendingSD = true;
 
       AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
         [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
         {
           uint32_t bytes = 0;
 
-          File SDReadFile = SD.open(datalogFilename, FILE_READ);
+          //File SDReadFile = SD.open(datalogFilename, FILE_READ);
           if(SDReadFile)
           {
             SDReadFile.seek(index);
@@ -410,7 +409,11 @@ void handleDownload(AsyncWebServerRequest *request)
             }
             //leaveSD();
 
-            SDReadFile.close();
+            if(0 == bytes) {
+              Serial.println("Download finished");
+              SDReadFile.close();
+              isSendingSD = false;
+            }
           }
           return bytes;
         });
@@ -422,7 +425,7 @@ void handleDownload(AsyncWebServerRequest *request)
       request->send(500, "text/plain", "Could not open " + datalogFilename);
     }
   } else {
-    request->send(500, "text/plain", "SD not found");
+    request->send(500, "text/plain", "SD card busy or not initialized");
   }
 }
 
