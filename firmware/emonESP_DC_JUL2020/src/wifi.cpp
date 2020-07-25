@@ -29,7 +29,7 @@
 #include <ESP8266WiFi.h>              // Connect to Wifi
 #include <ESP8266mDNS.h>              // Resolve URL for update server etc.
 #include <DNSServer.h>                // Required for captive portal
-#include <String.h>
+#include <string.h>
 
 DNSServer dnsServer;                  // Create class DNS server, captive portal re-direct
 const byte DNS_PORT = 53;

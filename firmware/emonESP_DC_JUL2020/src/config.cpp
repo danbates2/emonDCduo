@@ -29,7 +29,7 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>                   // Save config settings
-#include <String.h>
+#include <string.h>
 
 
 // Wifi Network Strings
