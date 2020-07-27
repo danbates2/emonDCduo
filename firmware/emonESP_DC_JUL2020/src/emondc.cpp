@@ -200,7 +200,8 @@ double TempAlarmBatLOW;
 RTC_PCF8523 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 unsigned long rtc_unixtime;
-bool timeConfidence = false; 
+bool timeConfidence = false;
+ 
 
 //------------------------------
 // NTP TIME SETTINGS
@@ -211,9 +212,14 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", time_offset, 300000);
 unsigned long previousMillisNTP = 0;
 unsigned long intervalNTP = 60000;
-// SD CARD
-String datalogFilename = "datalog.csv";
 bool SD_present = false;
+
+//------------------------------
+// SD CARD
+//------------------------------
+String datalogFilename = "datalog.csv";
+char datedFilename[15] = {"yyyy-mm-dd.csv"};
+
 
 //---------------
 // Misc
@@ -719,24 +725,17 @@ double make_readable_Amps (double _Value, bool _chan, double _gain) {
 //-------------------------
 // SD CARD
 //-------------------------
-
 void save_to_SDcard(void) {
   if (timeConfidence) {
     DateTime now = rtc.now();
-
-    String datedFilename;
-    datedFilename += String(now.year());
-    datedFilename += '-'; 
-    datedFilename += String(now.month());
-    datedFilename += '-'; 
-    datedFilename += String(now.day());
-    datedFilename += ".csv";
+    sprintf(datedFilename, "%04d-%02d-%02d.csv", now.year(), now.month(), now.day());
 
     File dataFile = SD.open(datedFilename, FILE_WRITE);
     if (dataFile) {
       dataFile.println(ADC_KeyValue_String);
       dataFile.close();
-      Serial.println("SD card save OK - dated.");
+      Serial.print("SD card save OK - dated - ");
+      Serial.println(datedFilename);
     }
     else {
       Serial.println("error opening datedFilename");
