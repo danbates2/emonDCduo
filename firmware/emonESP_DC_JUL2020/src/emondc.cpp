@@ -212,13 +212,15 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", time_offset, 300000);
 unsigned long previousMillisNTP = 0;
 unsigned long intervalNTP = 60000;
-bool SD_present = false;
+
+
 
 //------------------------------
 // SD CARD
 //------------------------------
 String datalogFilename = "datalog.csv";
 char datedFilename[15] = {"yyyy-mm-dd.csv"};
+bool SD_present = false;
 
 
 //---------------
@@ -721,13 +723,13 @@ double make_readable_Amps (double _Value, bool _chan, double _gain) {
 }
 
 
-
 //-------------------------
 // SD CARD
 //-------------------------
 void save_to_SDcard(void) {
   if (timeConfidence) {
     DateTime now = rtc.now();
+
     sprintf(datedFilename, "%04d-%02d-%02d.csv", now.year(), now.month(), now.day());
 
     File dataFile = SD.open(datedFilename, FILE_WRITE);
@@ -741,6 +743,7 @@ void save_to_SDcard(void) {
       Serial.println("error opening datedFilename");
     }
   }
+
   else { // if timeConfidence == false.
     File dataFile = SD.open(datalogFilename, FILE_WRITE);
     // if the file is available, write to it:
