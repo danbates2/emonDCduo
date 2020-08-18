@@ -668,6 +668,9 @@ void NTPupdate_RTCupdate(void) {
   }
   DateTime now = rtc.now();
   rtc_unixtime = now.unixtime();
+  timeval tv;
+  tv.tv_sec = now.unixtime();
+  settimeofday(&tv, NULL);
 }
 
 
