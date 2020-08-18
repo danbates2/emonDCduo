@@ -581,7 +581,20 @@ void handleSdDelete(AsyncWebServerRequest *request) {
       return;
     }
 
+    // Check if the file is a directory
+    File object = SD.open(path);
+    if(object) 
+    {
+      if(object.isDirectory()) {
+        request->send(405, "text/plain", "Can not delete directories");
+      }
+      object.close();
+      SD.remove(path);
 
+      request->send(200, "text/plain", "Ok");
+    } else {
+      request->send(404, "text/plain", "Path \""+path+"\" does not exist");
+    }
   } else {
     request->send(428, "text/plain", "SD card busy or not initialized");
   }
