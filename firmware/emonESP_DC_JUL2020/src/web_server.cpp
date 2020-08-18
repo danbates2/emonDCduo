@@ -432,6 +432,13 @@ void handleDownload(AsyncWebServerRequest *request)
   }
 }
 
+static String formatTime(time_t time)
+{
+  struct tm * tmstruct = localtime(&time);
+  char buffer[64];
+  snprintf(buffer, sizeof(buffer), "%d-%02d-%02d %02d:%02d:%02d", (tmstruct->tm_year) + 1900, (tmstruct->tm_mon) + 1, tmstruct->tm_mday, tmstruct->tm_hour, tmstruct->tm_min, tmstruct->tm_sec);
+  return String(buffer);
+}
 
 void handleSdGet(AsyncWebServerRequest *request) {
   dumpRequest(request);
@@ -502,8 +509,8 @@ void handleSdGet(AsyncWebServerRequest *request) {
           if (entry.isFile()) 
           {
             entryDoc["size"] = entry.size();
-            entryDoc["create"] = entry.getCreationTime();
-            entryDoc["modified"] = entry.getLastWrite();
+            entryDoc["create"] = formatTime(entry.getCreationTime());
+            entryDoc["modified"] = formatTime(entry.getLastWrite());
           }
           entry.close();
         }
