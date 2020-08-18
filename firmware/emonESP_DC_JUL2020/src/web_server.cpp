@@ -437,7 +437,8 @@ void handleSdGet(AsyncWebServerRequest *request) {
   dumpRequest(request);
 
   AsyncResponseStream *response;
-  if (false == requestPreProcess(request, response)) {
+  if (www_username != "" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+    request->requestAuthentication();
     return;
   }
 
@@ -457,6 +458,10 @@ void handleSdGet(AsyncWebServerRequest *request) {
       doc["clusterSize"] = SD.clusterSize();
       doc["size"] = SD.size64();
 
+      response = request->beginResponseStream(String(CONTENT_TYPE_JSON));
+      if (enableCors) {
+        response->addHeader("Access-Control-Allow-Origin", "*");
+      }
       response->setCode(200);
       serializeJson(doc, *response);
       request->send(response);
@@ -469,7 +474,11 @@ void handleSdGet(AsyncWebServerRequest *request) {
       }
 
       File object = SD.open(path);
-      if(object.isDirectory())
+      if(!object) 
+      {
+        request->send(404, "text/plain", "Path \""+path+"\" does not exist");
+      }
+      else if(object.isDirectory())
       {
         const size_t capacity = 4096; //JSON_OBJECT_SIZE(40) + 1024;
         DynamicJsonDocument doc(capacity);
@@ -500,24 +509,78 @@ void handleSdGet(AsyncWebServerRequest *request) {
         }
         object.close();
 
+        response = request->beginResponseStream(String(CONTENT_TYPE_JSON));
+        if (enableCors) {
+          response->addHeader("Access-Control-Allow-Origin", "*");
+        }
         response->setCode(200);
         serializeJson(doc, *response);
         request->send(response);
-      } else {
-        request->send(500, "text/plain", "TODO");
+      } 
+      else
+      {
+        if(isSendingSD) {
+          request->send(429, "text/plain", "Already downloading a file from SD, try again later");
+          return;
+        }
+        isSendingSD = true;
+
+        SDReadFile = object;
+
+        AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
+          [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
+          {
+            uint32_t bytes = 0;
+
+            SDReadFile.seek(index);
+      
+            size_t dataRemaining = SDReadFile.size() - SDReadFile.position();
+            DBUGLN("Data remaining:" + String(dataRemaining));
+
+            uint32_t readBytes;
+
+            //waitSD();
+            if( dataRemaining > 0) {
+              bytes = SDReadFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
+            }
+            //leaveSD();
+
+            if(0 == bytes) {
+              DBUGLN("Download finished");
+              SDReadFile.close();
+              isSendingSD = false;
+            }
+
+            return bytes;
+          });
+
+        response->addHeader("Content-Disposition", "attachment; filename=" + String("datalog.csv"));
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
       }
     }
   } else {
-    request->send(500, "text/plain", "SD card busy or not initialized");
+    request->send(428, "text/plain", "SD card busy or not initialized");
   }
 }
 
 void handleSdDelete(AsyncWebServerRequest *request) {
+  dumpRequest(request);
+
   AsyncResponseStream *response;
-  if (false == requestPreProcess(request, response)) {
+  if (www_username != "" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+    request->requestAuthentication();
     return;
   }
 
+  if(SD_present)
+  {
+    String path = request->url().substring(3);
+    if(0 == path.length()) {
+    }
+  } else {
+    request->send(428, "text/plain", "SD card busy or not initialized");
+  }
 }
 
 void handleSdPost(AsyncWebServerRequest *request) {
@@ -527,6 +590,22 @@ void handleSdPost(AsyncWebServerRequest *request) {
   }
 
 }
+
+void handleSdPostBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+{
+  if(!index) {
+    DBUGF("BodyStart: %u", total);
+    //request->_tempObject = new String();
+  }
+  //String *body = (String *)request->_tempObject;
+  DBUGF("%.*s", len, (const char*)data);
+  //body->concat((const char*)data, len);
+  if(index + len == total) {
+    DBUGF("BodyEnd: %u", total);
+  }
+}
+
+
 
 // -------------------------------------------------------------------
 // Returns status json
@@ -838,7 +917,7 @@ web_server_setup()
 
   server.on("/sd*", HTTP_GET, handleSdGet);
   server.on("/sd*", HTTP_DELETE, handleSdDelete);
-  //server.on("/sd", HTTP_POST, handleSdPost, NULL, handleSdBody);
+  server.on("/sd*", HTTP_POST, handleSdPost, NULL, handleSdPostBody);
 
   server.on("/upload", HTTP_POST, [](AsyncWebServerRequest * request) {
     request->send(200);
