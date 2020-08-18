@@ -29,6 +29,9 @@
 //#define FS_NO_GLOBALS
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
+#define ARDUINOJSON_USE_LONG_LONG 1
+#include <ArduinoJson.h>
+
 #include "emonesp.h"
 #include "web_server.h"
 #include "web_server_static.h"
@@ -53,9 +56,9 @@ StaticFileWebHandler staticFile;
 
 // Content Types
 const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
 const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
-//const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
 const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 
 bool enableCors = true;
@@ -430,97 +433,100 @@ void handleDownload(AsyncWebServerRequest *request)
 }
 
 
-// full example below.
+void handleSdGet(AsyncWebServerRequest *request) {
+  dumpRequest(request);
 
-//   if (isSendingSD == 0 && SD_present) {
-// 		//DEBUG_EVENT("LOAD SD Card requested");
-// 		//if (sending == 1) returnFail(request, "Already sending");
-// 		char name[64];
-// 		//substitute percent20 to space
-// 		String path = (String)request->arg("path");
-// 		//DEBUG_EVENT("path: " + path);
-// 		std::string path_ = path.c_str();
-// 		//ReplaceStringInPlace(path_, "%20", " "); //troca %20 por " " - espaço (correção de padding)
-// 		path = path_.c_str();
-
-// 		//waitSD();
-// 		//SDReadFile = SD.open(path.c_str(), O_READ);
-//     SDReadFile = SD.open(datalogFilename, FILE_READ);
-// 		//leaveSD();
-
-// 		if (!SDReadFile) {
-// 			Serial.println("File dont exist");
-// 			//DEBUG_EVENT("File dont exist");
-// 			//returnFail(request, "File dont exist");
-// 		}
-// 		isSendingSD = 1;
-// 		//waitSD();
-// 		//SDReadFile.getName(name, 63);
-// 		//leaveSD();
-
-// 		dataAvaliable = SDReadFile.size() - SDReadFile.position();
-// 		Serial.println("Total file size:" + String(dataAvaliable));
-    
-//     //AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", dataAvaliable,
-// 		AsyncWebServerResponse *response = request->beginResponse("text/plain", dataAvaliable,
-// 			[](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-// 			uint32_t readBytes;
-// 			uint32_t bytes = 0;
-// 			uint32_t avaliableBytes = SDReadFile.available();
-
-// 			//waitSD();
-
-// 			if (avaliableBytes > maxLen) {
-// 				bytes = SDReadFile.readBytes(buffer, maxLen);
-// 			}
-// 			else {
-// 				bytes = SDReadFile.readBytes(buffer, avaliableBytes);
-// 				isSendingSD = 0;
-// 				SDReadFile.close();
-// 			}
-
-// 			//leaveSD();
-// 			return bytes;
-// 		});
-
-// 		response->addHeader("Cache-Control", "no-cache");
-// 		response->addHeader("Content-Disposition", "attachment; filename=" + String(name));
-// 		response->addHeader("Access-Control-Allow-Origin", "*");
-// 		request->send(response);
-// 	}
-// 	else
-// 	{
-// 		Serial.println("SD card busy or not initialized");
-// 	}
-
-// }
-
-
-
-/*  AsyncResponseStream *response;
-  if (false == requestPreProcess(request, response, "text/plain")) {
+  AsyncResponseStream *response;
+  if (false == requestPreProcess(request, response)) {
     return;
   }
-  Serial.println("testing Download Handle");
 
-  File dataFile = SD.open(datalogFilename, FILE_READ);
+  if(SD_present)
+  {
+    String path = request->url().substring(3);
+    if(0 == path.length()) {
+      const size_t capacity = JSON_OBJECT_SIZE(6) + 128;
+      DynamicJsonDocument doc(capacity);
 
-  if (dataFile) {
-    request->beginResponse(dataFile, "/", "text/text", true);
-    response->addHeader("Content-Disposition", "attachment; filename=" + datalogFilename);
-    response->setCode(200);
-    request->send(response);
-    dataFile.close();
-    Serial.println("SD card read OK");
+      doc["type"] = SD.type();
+      doc["fatType"] = SD.fatType();
+      doc["blocksPerCluster"] = SD.blocksPerCluster();
+      doc["totalClusters"] = SD.totalClusters();
+      doc["blockSize"] = SD.blockSize();
+      doc["totalBlocks"] = SD.totalBlocks();
+      doc["clusterSize"] = SD.clusterSize();
+      doc["size"] = SD.size64();
+
+      response->setCode(200);
+      serializeJson(doc, *response);
+      request->send(response);
+    }
+    else
+    {
+      String urlBase = String("/sd");
+      if(path.equals("/")) {
+        urlBase += "/";
+      }
+
+      File object = SD.open(path);
+      if(object.isDirectory())
+      {
+        const size_t capacity = 4096; //JSON_OBJECT_SIZE(40) + 1024;
+        DynamicJsonDocument doc(capacity);
+
+        while (true) 
+        {
+          File entry =  object.openNextFile();
+          if (! entry) {
+            // no more files
+            break;
+          }
+
+          JsonObject entryDoc = doc.createNestedObject();
+          
+          // Cast strings to char * to force a copy of the string, so it is not corrupted when the next 
+          // entry is read
+          entryDoc["name"] = (char *)entry.name();
+          entryDoc["url"] = urlBase + entry.fullName();
+          entryDoc["directory"] = entry.isDirectory();
+          entryDoc["hidden"] = '.' == entry.name()[0];
+          if (entry.isFile()) 
+          {
+            entryDoc["size"] = entry.size();
+            entryDoc["create"] = entry.getCreationTime();
+            entryDoc["modified"] = entry.getLastWrite();
+          }
+          entry.close();
+        }
+        object.close();
+
+        response->setCode(200);
+        serializeJson(doc, *response);
+        request->send(response);
+      } else {
+        request->send(500, "text/plain", "TODO");
+      }
+    }
+  } else {
+    request->send(500, "text/plain", "SD card busy or not initialized");
   }
-  else {
-    response->setCode(200);
-    Serial.println("SD card read fail");
-    request->send(response);
+}
+
+void handleSdDelete(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if (false == requestPreProcess(request, response)) {
+    return;
   }
-  */
 
+}
 
+void handleSdPost(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if (false == requestPreProcess(request, response)) {
+    return;
+  }
+
+}
 
 // -------------------------------------------------------------------
 // Returns status json
@@ -829,6 +835,10 @@ web_server_setup()
 
   server.on("/savedc", handleEmonDC);
   server.on("/download", handleDownload);
+
+  server.on("/sd*", HTTP_GET, handleSdGet);
+  server.on("/sd*", HTTP_DELETE, handleSdDelete);
+  //server.on("/sd", HTTP_POST, handleSdPost, NULL, handleSdBody);
 
   server.on("/upload", HTTP_POST, [](AsyncWebServerRequest * request) {
     request->send(200);
