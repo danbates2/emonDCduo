@@ -1,6 +1,7 @@
 
 ###
 
+# Download data file, depricated
 GET http://172.16.0.90/download
 
 ###
@@ -16,13 +17,45 @@ GET http://172.16.0.90/sd/
 
 ###
 
+#Get a sub directory
 GET http://172.16.0.90/sd/.fseventsd
 
 ###
 
-GET http://172.16.0.90/sd/2106-02-06.csv
+# Delete a directory (will fail, expected)
+DELETE http://172.16.0.90/sd/.fseventsd
 
 ###
 
+# Upload to a directory, expected to fail
+POST http://172.16.0.90/sd/.fseventsd
+
+Can not post to a directory
+
+###
+
+# Get a file
+GET http://172.16.0.90/sd/2020-08-17.csv
+
+###
+
+# Get a file that does not exist, expected 404
 GET http://172.16.0.90/sd/some_missing_file
+
+###
+
+# Upload a file
+POST http://172.16.0.90/sd/test_upload.txt
+
+This is a test upload to the SD card
+
+###
+
+# Download that file
+GET http://172.16.0.90/sd/test_upload.txt
+
+###
+
+# Delete a file
+DELETE http://172.16.0.90/sd/test_upload.txt
 
