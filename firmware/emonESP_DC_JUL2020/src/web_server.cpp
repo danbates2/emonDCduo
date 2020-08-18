@@ -378,18 +378,18 @@ void handleLastValues(AsyncWebServerRequest *request) {
 // Download from SD card.
 // url: /download
 // -------------------------------------------------------------------
-bool isSendingSD = false;
-File SDReadFile;
+bool sdGlobalFileInUse = false;
+File sdGlobalFile;
 // https://github.com/me-no-dev/ESPAsyncWebServer/issues/124
 void handleDownload(AsyncWebServerRequest *request) 
 {
-  if(SD_present && !isSendingSD)
+  if(SD_present && !sdGlobalFileInUse)
   {
-    SDReadFile = SD.open(datalogFilename, FILE_READ);
-    if(SDReadFile)
+    sdGlobalFile = SD.open(datalogFilename, FILE_READ);
+    if(sdGlobalFile)
     {
-      Serial.println("Data remaining:" + String(SDReadFile.size()));
-      isSendingSD = true;
+      Serial.println("Data remaining:" + String(sdGlobalFile.size()));
+      sdGlobalFileInUse = true;
 
       AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
         [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
@@ -397,25 +397,25 @@ void handleDownload(AsyncWebServerRequest *request)
           uint32_t bytes = 0;
 
           //File SDReadFile = SD.open(datalogFilename, FILE_READ);
-          if(SDReadFile)
+          if(sdGlobalFile)
           {
-            SDReadFile.seek(index);
+            sdGlobalFile.seek(index);
       
-            size_t dataRemaining = SDReadFile.size() - SDReadFile.position();
+            size_t dataRemaining = sdGlobalFile.size() - sdGlobalFile.position();
             Serial.println("Data remaining:" + String(dataRemaining));
 
             uint32_t readBytes;
 
             //waitSD();
             if( dataRemaining > 0) {
-              bytes = SDReadFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
+              bytes = sdGlobalFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
             }
             //leaveSD();
 
             if(0 == bytes) {
               Serial.println("Download finished");
-              SDReadFile.close();
-              isSendingSD = false;
+              sdGlobalFile.close();
+              sdGlobalFileInUse = false;
             }
           }
           return bytes;
@@ -519,36 +519,36 @@ void handleSdGet(AsyncWebServerRequest *request) {
       } 
       else
       {
-        if(isSendingSD) {
+        if(sdGlobalFileInUse) {
           request->send(429, "text/plain", "Already downloading a file from SD, try again later");
           return;
         }
-        isSendingSD = true;
+        sdGlobalFileInUse = true;
 
-        SDReadFile = object;
+        sdGlobalFile = object;
 
         AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
           [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
           {
             uint32_t bytes = 0;
 
-            SDReadFile.seek(index);
+            sdGlobalFile.seek(index);
       
-            size_t dataRemaining = SDReadFile.size() - SDReadFile.position();
+            size_t dataRemaining = sdGlobalFile.size() - sdGlobalFile.position();
             DBUGLN("Data remaining:" + String(dataRemaining));
 
             uint32_t readBytes;
 
             //waitSD();
             if( dataRemaining > 0) {
-              bytes = SDReadFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
+              bytes = sdGlobalFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
             }
             //leaveSD();
 
             if(0 == bytes) {
               DBUGLN("Download finished");
-              SDReadFile.close();
-              isSendingSD = false;
+              sdGlobalFile.close();
+              sdGlobalFileInUse = false;
             }
 
             return bytes;
@@ -577,31 +577,81 @@ void handleSdDelete(AsyncWebServerRequest *request) {
   {
     String path = request->url().substring(3);
     if(0 == path.length()) {
+      request->send(405);
+      return;
     }
+
+
   } else {
     request->send(428, "text/plain", "SD card busy or not initialized");
   }
 }
 
 void handleSdPost(AsyncWebServerRequest *request) {
-  AsyncResponseStream *response;
-  if (false == requestPreProcess(request, response)) {
-    return;
-  }
-
+  request->send(200, "text/plain", "Ok");
 }
 
 void handleSdPostBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
   if(!index) {
     DBUGF("BodyStart: %u", total);
+
+    dumpRequest(request);
+
+    AsyncResponseStream *response;
+    if (www_username != "" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+      request->requestAuthentication();
+      return;
+    }
+
+    if(SD_present)
+    {
+      String path = request->url().substring(3);
+      if(0 == path.length()) {
+        request->send(405);
+        return;
+      }
+
+      // Check if the file is a directory
+      File object = SD.open(path);
+      if(object) 
+      {
+        if(object.isDirectory()) {
+          request->send(405, "text/plain", "Can not upload to directories");
+        }
+        object.close();
+        SD.remove(path);
+      }
+
+      if(sdGlobalFileInUse) {
+        request->send(429, "text/plain", "Already downloading a file from SD, try again later");
+        return;
+      }
+      sdGlobalFile = SD.open(path, FILE_WRITE);
+      if(sdGlobalFile)
+      {
+        sdGlobalFileInUse = true;
+
+      } else {
+        request->send(500, "text/plain", "Error opening file for write");
+        return;
+      } 
+    } else {
+      request->send(428, "text/plain", "SD card busy or not initialized");
+      return;
+    }
+
     //request->_tempObject = new String();
   }
-  //String *body = (String *)request->_tempObject;
+
   DBUGF("%.*s", len, (const char*)data);
+  sdGlobalFile.write((const char*)data, len);
+
   //body->concat((const char*)data, len);
   if(index + len == total) {
     DBUGF("BodyEnd: %u", total);
+    sdGlobalFile.close();
+    sdGlobalFileInUse = false;
   }
 }
 
