@@ -1,0 +1,28 @@
+
+###
+
+GET http://172.16.0.90/download
+
+###
+
+# Get card info
+GET http://172.16.0.90/sd
+
+
+###
+
+# get root dir info
+GET http://172.16.0.90/sd/
+
+###
+
+GET http://172.16.0.90/sd/.fseventsd
+
+###
+
+GET http://172.16.0.90/sd/2106-02-06.csv
+
+###
+
+GET http://172.16.0.90/sd/some_missing_file
+
