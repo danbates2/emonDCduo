@@ -561,7 +561,7 @@ void handleSdGet(AsyncWebServerRequest *request) {
             return bytes;
           });
 
-        response->addHeader("Content-Disposition", "attachment; filename=" + String("datalog.csv"));
+        response->addHeader("Content-Disposition", String("attachment; filename=") + sdGlobalFile.name());
         response->addHeader("Access-Control-Allow-Origin", "*");
         request->send(response);
       }
