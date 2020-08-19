@@ -1,61 +1,72 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://emondc.local
 
 ###
 
 # Download data file, depricated
-GET http://172.16.0.90/download
+GET {{baseUrl}}/download
 
 ###
 
 # Get card info
-GET http://172.16.0.90/sd
+GET {{baseUrl}}/sd
 
 
 ###
 
 # get root dir info
-GET http://172.16.0.90/sd/
+GET {{baseUrl}}/sd/
 
 ###
 
 #Get a sub directory
-GET http://172.16.0.90/sd/.fseventsd
+GET {{baseUrl}}/sd/.fseventsd
 
 ###
 
 # Delete a directory (will fail, expected)
-DELETE http://172.16.0.90/sd/.fseventsd
+DELETE {{baseUrl}}/sd/.fseventsd
 
 ###
 
 # Upload to a directory, expected to fail
-POST http://172.16.0.90/sd/.fseventsd
+POST {{baseUrl}}/sd/.fseventsd
 
 Can not post to a directory
 
 ###
 
 # Get a file
-GET http://172.16.0.90/sd/2020-08-17.csv
+GET {{baseUrl}}/sd/2020-08-17.csv
 
 ###
 
 # Get a file that does not exist, expected 404
-GET http://172.16.0.90/sd/some_missing_file
+GET {{baseUrl}}/sd/some_missing_file
 
 ###
 
 # Upload a file
-POST http://172.16.0.90/sd/test_upload.txt
+POST {{baseUrl}}/sd/test_upload.txt
 
 This is a test upload to the SD card
 
 ###
 
 # Download that file
-GET http://172.16.0.90/sd/test_upload.txt
+GET {{baseUrl}}/sd/test_upload.txt
 
 ###
 
 # Delete a file
-DELETE http://172.16.0.90/sd/test_upload.txt
+DELETE {{baseUrl}}/sd/test_upload.txt
 
