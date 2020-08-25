@@ -57,7 +57,7 @@ extern bool SD_present;
 void config_save_emondc(unsigned int interval, double vcalA, double icalA, double vcalB, double icalB);
 double volts_to_adc_reading_ratio_function(void);
 extern void draw_OLED();
-void NTP_update_PCF8523_update(void);
+void NTPupdate_RTCupdate(void);
 void save_to_SDcard(void);
 void print_readable(void);
 void forward_to_emonESP(void);

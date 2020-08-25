@@ -21,6 +21,7 @@
 #include <RTClib.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+
  
 #define TEXTIFY(A) #A
 #define ESCAPEQUOTE(A) TEXTIFY(A)
@@ -198,7 +199,9 @@ double TempAlarmBatLOW;
 // PCF8523 Real-time Clock setup
 RTC_PCF8523 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-unsigned long rtc_now_time = 0;
+unsigned long rtc_unixtime;
+bool timeConfidence = false;
+ 
 
 //------------------------------
 // NTP TIME SETTINGS
@@ -209,9 +212,16 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", time_offset, 300000);
 unsigned long previousMillisNTP = 0;
 unsigned long intervalNTP = 60000;
+
+
+
+//------------------------------
 // SD CARD
-String datalogFilename = "datalog.txt";
-bool SD_present;
+//------------------------------
+String datalogFilename = "datalog.csv";
+char datedFilename[15] = {"yyyy-mm-dd.csv"};
+bool SD_present = false;
+
 
 //---------------
 // Misc
@@ -246,7 +256,6 @@ void emondc_setup(void) {
   }
   else {
     Serial.println("SD card not detected.");
-    SD_present = false;
   }
 
   // OLED Display init
@@ -263,15 +272,16 @@ void emondc_setup(void) {
   // RTC init
   if (!rtc.begin()) { Serial.println("RTC or I2C not functioning."); }
   else if (!rtc.initialized()) {
-    Serial.println("RTC not running,\r\n  - attempting initialisation with compile time.");
+    Serial.println("RTC not running\r\n - time will be attained via internet or connected client's browser.");
     // following line sets the RTC to the date & time this sketch was compiled
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
     // This line sets the RTC with an explicit date & time, for example to set
     // January 21, 2014 at 3am you would call:
     // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
   }
   else {
     Serial.println("RTC initialised.");
+    timeConfidence = true;
   }
 
   // Start NTP time 
@@ -325,12 +335,12 @@ void emondc_loop(void) {
 
   currentMillis = millis();
   yield();
-  if (currentMillis - previousMillis >= readings_interval*1000) {
+  if (currentMillis - previousMillis >= readings_interval*1000 && numberofsamples >= 500) {
     //overrunMillis = currentMillis % main_interval_ms;
     uint32_t _previousMillis = previousMillis;
     previousMillis = currentMillis;
     //previousMillis = previousMillis - overrunMillis;
-    NTP_update_PCF8523_update();  // update RTC time, via network if available every 60s.   
+    NTPupdate_RTCupdate();  // update RTC time, via network if available every 60s.   
 
     yield();
     average_and_calibrate(_previousMillis, currentMillis); // readying the readable values, passing necessary time values associated with the posting intervals.
@@ -354,7 +364,7 @@ void emondc_loop(void) {
       //-----------------------------------
       yield();
       //-----------------------------------
-      numberofsamplesext = 0;
+      numberofsamplesext;
       Serial.print("number of posts: ");  Serial.println(number_of_posts); // for debugging
       Serial.print("FreeRAM (bytes): ");  Serial.println(ESP.getFreeHeap()); // for debugging
       clear_accumulators();
@@ -535,10 +545,17 @@ void forward_to_emonESP(void)
   ADC_KeyValue_String += time_until_discharged/3600;
   ADC_KeyValue_String += ",";
   ADC_KeyValue_String += "samplecount:";
-  ADC_KeyValue_String += numberofsamplesext;
+  ADC_KeyValue_String += numberofsamples;
   ADC_KeyValue_String += ",";
-  ADC_KeyValue_String += "time:";
-  ADC_KeyValue_String += rtc_now_time;
+  if (timeConfidence) {
+    ADC_KeyValue_String += "rtcTime:";
+    ADC_KeyValue_String += rtc_unixtime;
+  }
+  else {
+    ADC_KeyValue_String += "runTime:";
+    ADC_KeyValue_String += _t;
+  }
+  
   input_string = ADC_KeyValue_String;
 
   number_of_posts++;
@@ -601,7 +618,9 @@ void draw_OLED() {
     display.print(F("IP "));
     display.println(ipaddress);
     
-    DateTime now = rtc.now(); rtc_now_time = now.unixtime();
+    DateTime now = rtc.now();
+    rtc_unixtime = now.unixtime();
+    
     display.print(F("RTC | "));
     display.print(now.day(), DEC);
     display.print('/');
@@ -637,16 +656,18 @@ void draw_OLED() {
 // Update NTP time, set to RTC, read time from RTC.
 //-------------------------
 
-void NTP_update_PCF8523_update(void) {
+void NTPupdate_RTCupdate(void) {
   if (WiFi.status() == WL_CONNECTED) {
-    if (currentMillis - previousMillisNTP >= intervalNTP) {
+    if ((currentMillis - previousMillisNTP >= intervalNTP) || !timeConfidence) {
       previousMillisNTP = currentMillis;
-      timeClient.update();
-      rtc.adjust(timeClient.getEpochTime());
+      if (timeClient.update()) {
+        rtc.adjust(timeClient.getEpochTime());
+        timeConfidence = true;
+      }
     }
   }
   DateTime now = rtc.now();
-  rtc_now_time = now.unixtime();
+  rtc_unixtime = now.unixtime();
 }
 
 
@@ -702,22 +723,40 @@ double make_readable_Amps (double _Value, bool _chan, double _gain) {
 }
 
 
-
 //-------------------------
 // SD CARD
 //-------------------------
 void save_to_SDcard(void) {
-  File dataFile = SD.open(datalogFilename, FILE_WRITE);
-  // if the file is available, write to it:
-  if (dataFile) {
-    dataFile.println(ADC_KeyValue_String);
-    dataFile.close();
-    // print to the serial port too:
-    Serial.println("SD card save OK");
+  if (timeConfidence) {
+    DateTime now = rtc.now();
+
+    sprintf(datedFilename, "%04d-%02d-%02d.csv", now.year(), now.month(), now.day());
+
+    File dataFile = SD.open(datedFilename, FILE_WRITE);
+    if (dataFile) {
+      dataFile.println(ADC_KeyValue_String);
+      dataFile.close();
+      Serial.print("SD card save OK - dated - ");
+      Serial.println(datedFilename);
+    }
+    else {
+      Serial.println("error opening datedFilename");
+    }
   }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog.txt");
+
+  else { // if timeConfidence == false.
+    File dataFile = SD.open(datalogFilename, FILE_WRITE);
+    // if the file is available, write to it:
+    if (dataFile) {
+      dataFile.println(ADC_KeyValue_String);
+      dataFile.close();
+      // print to the serial port too:
+      Serial.println("SD card save OK - undated.");
+    }
+    // if the file isn't open, pop up an error:
+    else {
+      Serial.println("error opening datalog.csv");
+    }
   }
 }
 

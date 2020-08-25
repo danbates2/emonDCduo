@@ -35,7 +35,7 @@
 
 #include "emonesp.h"
 #include "config.h"
-#include <WiFi.h>
+#include <wifi.h>
 #include "wifi.h"
 #include "web_server.h"
 #include "ota.h"
