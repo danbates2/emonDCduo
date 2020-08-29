@@ -358,8 +358,17 @@
         <h2 onclick="toggle('logs');"><span>✳</span> Logs <span>✳</span></h2>
         <div id="logs" class="itembody-wrapper scrollable-logs" style="display:none">
           <div class="itembody-wrapper">
-            <a href="/download" download>
-              <button id="download1">Download SD Card File</button>
+            <select data-bind="options: storage.filesFiltered,
+                               optionsText: function(item) {
+                                 return item.name();
+                               },
+                               optionsValue: function(item) {
+                                 return item.url();
+                               },
+                               value: downloadFile,
+                               optionsCaption: 'Choose...'"></select>
+            <a data-bind="enable: downloadFile() !== undefined, attr: { href: downloadFile }">
+              <button id="download1" data-bind="enable: downloadFile() !== undefined">Download SD Card File</button>
             </a>
           </div>
           <div class="itembody-wrapper scrollable-logs">
