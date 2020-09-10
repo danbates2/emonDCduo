@@ -281,6 +281,11 @@ void emondc_setup(void) {
   }
   else {
     Serial.println("RTC initialised.");
+
+    timeval tv;
+    tv.tv_sec = rtc.now().unixtime();
+    settimeofday(&tv, NULL);
+
     timeConfidence = true;
   }
 
@@ -651,6 +656,20 @@ void draw_OLED() {
   display.display(); // refresh display with buffer contents.
 }
 
+//-------------------------
+// Set the time on the RTC
+//-------------------------
+void set_rtc(const DateTime &dt)
+{
+  timeval tv;
+
+  rtc.adjust(timeClient.getEpochTime());
+  
+  tv.tv_sec = dt.unixtime();
+  settimeofday(&tv, NULL);
+
+  timeConfidence = true;
+}
 
 //-------------------------
 // Update NTP time, set to RTC, read time from RTC.
@@ -661,16 +680,12 @@ void NTPupdate_RTCupdate(void) {
     if ((currentMillis - previousMillisNTP >= intervalNTP) || !timeConfidence) {
       previousMillisNTP = currentMillis;
       if (timeClient.update()) {
-        rtc.adjust(timeClient.getEpochTime());
-        timeConfidence = true;
+        set_rtc(timeClient.getEpochTime());
       }
     }
   }
   DateTime now = rtc.now();
   rtc_unixtime = now.unixtime();
-  timeval tv;
-  tv.tv_sec = now.unixtime();
-  settimeofday(&tv, NULL);
 }
 
 

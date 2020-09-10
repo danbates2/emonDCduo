@@ -707,8 +707,9 @@ void handleStatus(AsyncWebServerRequest *request) {
 
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
 
+  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\",";
 
-  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
+  s += "\"rtc_set\":" + String(timeConfidence ? "true" : "false");
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"version\":\"" + currentfirmware + "\"";
