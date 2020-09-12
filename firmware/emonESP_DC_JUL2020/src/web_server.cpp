@@ -487,8 +487,16 @@ void handleSdGet(AsyncWebServerRequest *request) {
       }
       else if(object.isDirectory())
       {
-        const size_t capacity = 4096; //JSON_OBJECT_SIZE(40) + 1024;
-        DynamicJsonDocument doc(capacity);
+        response = request->beginResponseStream(String(CONTENT_TYPE_JSON));
+        if (enableCors) {
+          response->addHeader("Access-Control-Allow-Origin", "*");
+        }
+        response->setCode(200);
+
+        // The directory listing can result in a large JSON doc so we will only use ArduinoJSON for each object
+        // and build the JSON array manually 
+        bool first = true;
+        response->print("[");
 
         while (true) 
         {
@@ -498,30 +506,29 @@ void handleSdGet(AsyncWebServerRequest *request) {
             break;
           }
 
-          JsonObject entryDoc = doc.createNestedObject();
-          
-          // Cast strings to char * to force a copy of the string, so it is not corrupted when the next 
-          // entry is read
-          entryDoc["name"] = (char *)entry.name();
-          entryDoc["url"] = urlBase + entry.fullName();
-          entryDoc["directory"] = entry.isDirectory();
-          entryDoc["hidden"] = '.' == entry.name()[0];
+          const size_t capacity = JSON_OBJECT_SIZE(7) + 512;
+          DynamicJsonDocument doc(capacity);
+          doc["name"] = entry.name();
+          doc["url"] = urlBase + entry.fullName();
+          doc["directory"] = entry.isDirectory();
+          doc["hidden"] = '.' == entry.name()[0];
           if (entry.isFile()) 
           {
-            entryDoc["size"] = entry.size();
-            entryDoc["create"] = formatTime(entry.getCreationTime());
-            entryDoc["modified"] = formatTime(entry.getLastWrite());
+            doc["size"] = entry.size();
+            doc["create"] = formatTime(entry.getCreationTime());
+            doc["modified"] = formatTime(entry.getLastWrite());
           }
+          if(!first) {
+            response->print(",");
+          }
+          serializeJson(doc, *response);
           entry.close();
+
+          first = false;
         }
         object.close();
 
-        response = request->beginResponseStream(String(CONTENT_TYPE_JSON));
-        if (enableCors) {
-          response->addHeader("Access-Control-Allow-Origin", "*");
-        }
-        response->setCode(200);
-        serializeJson(doc, *response);
+        response->print("]");
         request->send(response);
       } 
       else
