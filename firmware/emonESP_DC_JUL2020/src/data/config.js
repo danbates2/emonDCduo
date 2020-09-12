@@ -63,7 +63,8 @@ function StatusViewModel() {
     "packets_success": "",
     "emoncms_connected": "",
     "mqtt_connected": "",
-    "free_heap": ""
+    "free_heap": "",
+    "rtc_set": false
   }, baseEndpoint + '/status');
 
   // Some devired values
@@ -305,7 +306,17 @@ function EmonEspViewModel() {
       clearTimeout(updateTimer);
       updateTimer = null;
     }
-    self.status.update(function () {
+    self.status.update(function () 
+    {
+      // Time is not set, set from our local time
+      if(false === self.status.rtc_set())
+      {
+        var newTime = new Date();
+        $.post(baseEndpoint + "/settime", {
+          "time": newTime.toISOString()
+        }, () => {
+        });
+      }
       self.last.update(function () {
         updateTimer = setTimeout(self.update, updateTime);
         self.updating(false);

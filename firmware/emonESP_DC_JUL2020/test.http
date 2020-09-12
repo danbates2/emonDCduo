@@ -70,3 +70,24 @@ GET {{baseUrl}}/sd/test_upload.txt
 # Delete a file
 DELETE {{baseUrl}}/sd/test_upload.txt
 
+###
+
+# Get the status
+GET {{baseUrl}}/status
+
+###
+
+# Get the last values
+GET {{baseUrl}}/lastvalues
+
+###
+
+# Get the config
+GET {{baseUrl}}/config
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2020-09-12T20:44:36.924Z

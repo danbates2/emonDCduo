@@ -860,6 +860,45 @@ void handleInput(AsyncWebServerRequest *request) {
   DBUGLN(input_string);
 }
 
+
+// -------------------------------------------------------------------
+// Manually set the time
+// url: /settime
+// -------------------------------------------------------------------
+void
+handleSetTime(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if (false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  String time = request->arg("time");
+
+  struct tm tm;
+
+  int yr, mnth, d, h, m, s;
+  if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
+  {
+    DateTime set_time(yr, mnth, d, h, m, s);
+    char buf[] = "YYYY-MM-DDThh:mm:ssZ";
+    DBUGF("set_time = %s", set_time.toString(buf));
+    set_rtc(set_time);
+  }
+  else
+  {
+    response->setCode(400);
+    response->print("could not parse time");
+    request->send(response);
+    return;
+  }
+
+  response->setCode(200);
+  response->print("set");
+  request->send(response);
+}
+
+
+
 // -------------------------------------------------------------------
 // Update firmware
 // url: /update
@@ -974,6 +1013,7 @@ web_server_setup()
   server.on("/saveemoncms", handleSaveEmoncms);
   server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveadmin", handleSaveAdmin);
+  server.on("/settime", handleSetTime);
 
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);

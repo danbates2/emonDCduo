@@ -663,7 +663,7 @@ void set_rtc(const DateTime &dt)
 {
   timeval tv;
 
-  rtc.adjust(timeClient.getEpochTime());
+  rtc.adjust(dt);
   
   tv.tv_sec = dt.unixtime();
   settimeofday(&tv, NULL);
