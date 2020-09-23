@@ -5,7 +5,11 @@ var baseHost = window.location.hostname;
 //var baseHost = 'emonesp.local';
 //var baseHost = '192.168.4.1';
 //var baseHost = '172.16.0.52';
+var basePort = window.location.port;
 var baseEndpoint = 'http://' + baseHost;
+if(80 !== basePort) { 
+  baseEndpoint += ":"+basePort;
+}
 
 var statusupdate = false;
 var selected_network_ssid = "";
@@ -59,7 +63,8 @@ function StatusViewModel() {
     "packets_success": "",
     "emoncms_connected": "",
     "mqtt_connected": "",
-    "free_heap": ""
+    "free_heap": "",
+    "rtc_set": false
   }, baseEndpoint + '/status');
 
   // Some devired values
@@ -205,6 +210,46 @@ function LogsViewModel() {
   };
 }
 
+
+function StorageViewModel() {
+  var self = this;
+  var remoteUrl = baseEndpoint + '/sd';
+  var mappings = {};
+
+  self.fetching = ko.observable(false);
+  self.dir = ko.observable("/");
+  self.dir.subscribe(() => {
+    self.update();
+  });  
+  self.files = ko.mapping.fromJS([], mappings);
+  self.filesFiltered = ko.mapping.fromJS([], mappings);
+
+  self.update = (after) => {
+    if(after === undefined){
+     after = function () { };
+    }
+    self.fetching(true);
+    $.get(remoteUrl+self.dir(), function (data) {
+      data = data.sort(function (left, right) {
+        return left.name < right.name ? -1 : 1;
+      });
+
+      ko.mapping.fromJS(data, self.files);
+
+      const uniqueArray = data.filter((file, index) => {
+        return !file.hidden && !file.directory;
+      }).sort(function (left, right) {
+        return left.name < right.name ? 1 : -1;
+      });
+
+      ko.mapping.fromJS(uniqueArray, self.filesFiltered);
+    }, 'json').always(function () {
+      self.fetching(false);
+      after();
+    });
+  };
+}
+
 function EmonEspViewModel() {
   var self = this;
 
@@ -212,6 +257,8 @@ function EmonEspViewModel() {
   self.status = new StatusViewModel();
   self.last = new LastValuesViewModel();
   self.logs = new LogsViewModel();
+  self.storage = new StorageViewModel();
+  self.downloadFile = ko.observable('');
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
@@ -235,6 +282,8 @@ function EmonEspViewModel() {
         self.last.update(function () {
           self.initialised(true);
 
+          self.storage.update();
+
           updateTimer = setTimeout(self.update, updateTime);
           logUpdateTimer = setTimeout(self.updateLogs, logUpdateTime);
 
@@ -257,7 +306,17 @@ function EmonEspViewModel() {
       clearTimeout(updateTimer);
       updateTimer = null;
     }
-    self.status.update(function () {
+    self.status.update(function () 
+    {
+      // Time is not set, set from our local time
+      if(false === self.status.rtc_set())
+      {
+        var newTime = new Date();
+        $.post(baseEndpoint + "/settime", {
+          "time": newTime.toISOString()
+        }, () => {
+        });
+      }
       self.last.update(function () {
         updateTimer = setTimeout(self.update, updateTime);
         self.updating(false);
@@ -474,7 +533,7 @@ document.getElementById("restart").addEventListener("click", function (e) {
 // the downloader is not functional!
 // https://stackoverflow.com/questions/22724070/prompt-file-download-with-xmlhttprequest
 // -----------------------------------------------------------------------
-
+/*
 document.getElementById("download").addEventListener("click", function (e) {
 
 var r = new XMLHttpRequest();
@@ -496,7 +555,7 @@ function saveBlob(blob, fileName) {
   a.download = fileName;
   a.dispatchEvent(new MouseEvent('click'));
 }
-
+*/
 // r.onreadystatechange = function () {
 //   //if (r.readyState != 4 || r.status != 200)
 //     //return;

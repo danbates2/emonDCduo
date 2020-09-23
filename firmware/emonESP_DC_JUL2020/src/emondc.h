@@ -6,6 +6,7 @@
 #define _EMONDC_H
 
 #include <WString.h>
+#include <RTClib.h>
 
 extern uint16_t main_interval_seconds;
 extern uint32_t main_interval_ms;
@@ -54,6 +55,8 @@ extern void emondc_loop(void);
 extern String datalogFilename;
 extern bool SD_present;
 
+extern bool timeConfidence;
+
 void config_save_emondc(unsigned int interval, double vcalA, double icalA, double vcalB, double icalB);
 double volts_to_adc_reading_ratio_function(void);
 extern void draw_OLED();
@@ -71,5 +74,6 @@ double effective_capacity_fromfull(void);
 double Ah_calculate(double amps_value, uint16_t elapsed_seconds);
 void reset_ah_capacity(void);
 void clear_accumulators(void);
+void set_rtc(const DateTime &dt);
 
 #endif // _EMONDC_H

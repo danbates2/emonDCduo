@@ -1,0 +1,93 @@
+# Name: REST Client
+# Id: humao.rest-client
+# Description: REST Client for Visual Studio Code
+# Version: 0.21.3
+# Publisher: Huachao Mao
+# VS Marketplace Link: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
+# You should use environment vars (https://marketplace.visualstudio.com/items?itemName=humao.rest-client#environment-variables) for these
+# but you can also set here if needed (just don't check in!)
+
+#@baseUrl = http://emondc.local
+
+###
+
+# Download data file, depricated
+GET {{baseUrl}}/download
+
+###
+
+# Get card info
+GET {{baseUrl}}/sd
+
+
+###
+
+# get root dir info
+GET {{baseUrl}}/sd/
+
+###
+
+#Get a sub directory
+GET {{baseUrl}}/sd/.fseventsd
+
+###
+
+# Delete a directory (will fail, expected)
+DELETE {{baseUrl}}/sd/.fseventsd
+
+###
+
+# Upload to a directory, expected to fail
+POST {{baseUrl}}/sd/.fseventsd
+
+Can not post to a directory
+
+###
+
+# Get a file
+GET {{baseUrl}}/sd/2020-08-17.csv
+
+###
+
+# Get a file that does not exist, expected 404
+GET {{baseUrl}}/sd/some_missing_file
+
+###
+
+# Upload a file
+POST {{baseUrl}}/sd/test_upload.txt
+
+This is a test upload to the SD card
+
+###
+
+# Download that file
+GET {{baseUrl}}/sd/test_upload.txt
+
+###
+
+# Delete a file
+DELETE {{baseUrl}}/sd/test_upload.txt
+
+###
+
+# Get the status
+GET {{baseUrl}}/status
+
+###
+
+# Get the last values
+GET {{baseUrl}}/lastvalues
+
+###
+
+# Get the config
+GET {{baseUrl}}/config
+
+###
+
+POST {{baseUrl}}/settime HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+time=2020-09-12T20:44:36.924Z

@@ -202,6 +202,7 @@ void wifi_setup() {
 void wifi_loop() {
 
   dnsServer.processNextRequest(); // Captive portal DNS re-direct
+  MDNS.update();
 
   // Remain in AP mode for 5 Minutes before resetting
   if (wifi_mode == WIFI_MODE_AP_STA_RETRY) {

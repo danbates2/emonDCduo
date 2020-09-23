@@ -29,6 +29,9 @@
 //#define FS_NO_GLOBALS
 //#include <FS.h>                       // SPIFFS file-system: store web server html, CSS etc.
 
+#define ARDUINOJSON_USE_LONG_LONG 1
+#include <ArduinoJson.h>
+
 #include "emonesp.h"
 #include "web_server.h"
 #include "web_server_static.h"
@@ -53,9 +56,9 @@ StaticFileWebHandler staticFile;
 
 // Content Types
 const char _CONTENT_TYPE_HTML[] PROGMEM = "text/html";
-const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/text";
+const char _CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
 const char _CONTENT_TYPE_CSS[] PROGMEM = "text/css";
-//const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+const char _CONTENT_TYPE_JSON[] PROGMEM = "application/json";
 const char _CONTENT_TYPE_JS[] PROGMEM = "application/javascript";
 
 bool enableCors = true;
@@ -375,18 +378,18 @@ void handleLastValues(AsyncWebServerRequest *request) {
 // Download from SD card.
 // url: /download
 // -------------------------------------------------------------------
-bool isSendingSD = false;
-File SDReadFile;
+bool sdGlobalFileInUse = false;
+File sdGlobalFile;
 // https://github.com/me-no-dev/ESPAsyncWebServer/issues/124
 void handleDownload(AsyncWebServerRequest *request) 
 {
-  if(SD_present && !isSendingSD)
+  if(SD_present && !sdGlobalFileInUse)
   {
-    SDReadFile = SD.open(datalogFilename, FILE_READ);
-    if(SDReadFile)
+    sdGlobalFile = SD.open(datalogFilename, FILE_READ);
+    if(sdGlobalFile)
     {
-      Serial.println("Data remaining:" + String(SDReadFile.size()));
-      isSendingSD = true;
+      Serial.println("Data remaining:" + String(sdGlobalFile.size()));
+      sdGlobalFileInUse = true;
 
       AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
         [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
@@ -394,25 +397,26 @@ void handleDownload(AsyncWebServerRequest *request)
           uint32_t bytes = 0;
 
           //File SDReadFile = SD.open(datalogFilename, FILE_READ);
-          if(SDReadFile)
+          if(sdGlobalFile)
           {
-            SDReadFile.seek(index);
+            sdGlobalFile.seek(index);
       
-            size_t dataRemaining = SDReadFile.size() - SDReadFile.position();
+            size_t dataRemaining = sdGlobalFile.size() - sdGlobalFile.position();
+
             Serial.println("Data remaining:" + String(dataRemaining));
 
             uint32_t readBytes;
 
             //waitSD();
             if( dataRemaining > 0) {
-              bytes = SDReadFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
+              bytes = sdGlobalFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
             }
             //leaveSD();
 
             if(0 == bytes) {
               Serial.println("Download finished");
-              SDReadFile.close();
-              isSendingSD = false;
+              sdGlobalFile.close();
+              sdGlobalFileInUse = false;
             }
           }
           return bytes;
@@ -429,96 +433,255 @@ void handleDownload(AsyncWebServerRequest *request)
   }
 }
 
+static String formatTime(time_t time)
+{
+  struct tm * tmstruct = localtime(&time);
+  char buffer[64];
+  snprintf(buffer, sizeof(buffer), "%d-%02d-%02d %02d:%02d:%02d", (tmstruct->tm_year) + 1900, (tmstruct->tm_mon) + 1, tmstruct->tm_mday, tmstruct->tm_hour, tmstruct->tm_min, tmstruct->tm_sec);
+  return String(buffer);
+}
 
-// full example below.
+void handleSdGet(AsyncWebServerRequest *request) {
+  dumpRequest(request);
 
-//   if (isSendingSD == 0 && SD_present) {
-// 		//DEBUG_EVENT("LOAD SD Card requested");
-// 		//if (sending == 1) returnFail(request, "Already sending");
-// 		char name[64];
-// 		//substitute percent20 to space
-// 		String path = (String)request->arg("path");
-// 		//DEBUG_EVENT("path: " + path);
-// 		std::string path_ = path.c_str();
-// 		//ReplaceStringInPlace(path_, "%20", " "); //troca %20 por " " - espaço (correção de padding)
-// 		path = path_.c_str();
-
-// 		//waitSD();
-// 		//SDReadFile = SD.open(path.c_str(), O_READ);
-//     SDReadFile = SD.open(datalogFilename, FILE_READ);
-// 		//leaveSD();
-
-// 		if (!SDReadFile) {
-// 			Serial.println("File dont exist");
-// 			//DEBUG_EVENT("File dont exist");
-// 			//returnFail(request, "File dont exist");
-// 		}
-// 		isSendingSD = 1;
-// 		//waitSD();
-// 		//SDReadFile.getName(name, 63);
-// 		//leaveSD();
-
-// 		dataAvaliable = SDReadFile.size() - SDReadFile.position();
-// 		Serial.println("Total file size:" + String(dataAvaliable));
-    
-//     //AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", dataAvaliable,
-// 		AsyncWebServerResponse *response = request->beginResponse("text/plain", dataAvaliable,
-// 			[](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-// 			uint32_t readBytes;
-// 			uint32_t bytes = 0;
-// 			uint32_t avaliableBytes = SDReadFile.available();
-
-// 			//waitSD();
-
-// 			if (avaliableBytes > maxLen) {
-// 				bytes = SDReadFile.readBytes(buffer, maxLen);
-// 			}
-// 			else {
-// 				bytes = SDReadFile.readBytes(buffer, avaliableBytes);
-// 				isSendingSD = 0;
-// 				SDReadFile.close();
-// 			}
-
-// 			//leaveSD();
-// 			return bytes;
-// 		});
-
-// 		response->addHeader("Cache-Control", "no-cache");
-// 		response->addHeader("Content-Disposition", "attachment; filename=" + String(name));
-// 		response->addHeader("Access-Control-Allow-Origin", "*");
-// 		request->send(response);
-// 	}
-// 	else
-// 	{
-// 		Serial.println("SD card busy or not initialized");
-// 	}
-
-// }
-
-
-
-/*  AsyncResponseStream *response;
-  if (false == requestPreProcess(request, response, "text/plain")) {
+  AsyncResponseStream *response;
+  if (www_username != "" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+    request->requestAuthentication();
     return;
   }
-  Serial.println("testing Download Handle");
 
-  File dataFile = SD.open(datalogFilename, FILE_READ);
+  if(SD_present)
+  {
+    String path = request->url().substring(3);
+    if(0 == path.length()) {
+      const size_t capacity = JSON_OBJECT_SIZE(6) + 128;
+      DynamicJsonDocument doc(capacity);
 
-  if (dataFile) {
-    request->beginResponse(dataFile, "/", "text/text", true);
-    response->addHeader("Content-Disposition", "attachment; filename=" + datalogFilename);
-    response->setCode(200);
-    request->send(response);
-    dataFile.close();
-    Serial.println("SD card read OK");
+      doc["type"] = SD.type();
+      doc["fatType"] = SD.fatType();
+      doc["blocksPerCluster"] = SD.blocksPerCluster();
+      doc["totalClusters"] = SD.totalClusters();
+      doc["blockSize"] = SD.blockSize();
+      doc["totalBlocks"] = SD.totalBlocks();
+      doc["clusterSize"] = SD.clusterSize();
+      doc["size"] = SD.size64();
+
+      response = request->beginResponseStream(String(CONTENT_TYPE_JSON));
+      if (enableCors) {
+        response->addHeader("Access-Control-Allow-Origin", "*");
+      }
+      response->setCode(200);
+      serializeJson(doc, *response);
+      request->send(response);
+    }
+    else
+    {
+      String urlBase = String("/sd");
+      if(path.equals("/")) {
+        urlBase += "/";
+      }
+
+      File object = SD.open(path);
+      if(!object) 
+      {
+        request->send(404, "text/plain", "Path \""+path+"\" does not exist");
+      }
+      else if(object.isDirectory())
+      {
+        response = request->beginResponseStream(String(CONTENT_TYPE_JSON));
+        if (enableCors) {
+          response->addHeader("Access-Control-Allow-Origin", "*");
+        }
+        response->setCode(200);
+
+        // The directory listing can result in a large JSON doc so we will only use ArduinoJSON for each object
+        // and build the JSON array manually 
+        bool first = true;
+        response->print("[");
+
+        while (true) 
+        {
+          File entry =  object.openNextFile();
+          if (! entry) {
+            // no more files
+            break;
+          }
+
+          const size_t capacity = JSON_OBJECT_SIZE(7) + 512;
+          DynamicJsonDocument doc(capacity);
+          doc["name"] = entry.name();
+          doc["url"] = urlBase + entry.fullName();
+          doc["directory"] = entry.isDirectory();
+          doc["hidden"] = '.' == entry.name()[0];
+          if (entry.isFile()) 
+          {
+            doc["size"] = entry.size();
+            doc["create"] = formatTime(entry.getCreationTime());
+            doc["modified"] = formatTime(entry.getLastWrite());
+          }
+          if(!first) {
+            response->print(",");
+          }
+          serializeJson(doc, *response);
+          entry.close();
+
+          first = false;
+        }
+        object.close();
+
+        response->print("]");
+        request->send(response);
+      } 
+      else
+      {
+        if(sdGlobalFileInUse) {
+          request->send(429, "text/plain", "Already downloading a file from SD, try again later");
+          return;
+        }
+        sdGlobalFileInUse = true;
+
+        sdGlobalFile = object;
+
+        AsyncWebServerResponse *response = request->beginChunkedResponse("application/octet-stream", 
+          [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t 
+          {
+            uint32_t bytes = 0;
+
+            sdGlobalFile.seek(index);
+      
+            size_t dataRemaining = sdGlobalFile.size() - sdGlobalFile.position();
+            DBUGLN("Data remaining:" + String(dataRemaining));
+
+            uint32_t readBytes;
+
+            //waitSD();
+            if( dataRemaining > 0) {
+              bytes = sdGlobalFile.readBytes((char *)buffer, min(maxLen, dataRemaining));
+            }
+            //leaveSD();
+
+            if(0 == bytes) {
+              DBUGLN("Download finished");
+              sdGlobalFile.close();
+              sdGlobalFileInUse = false;
+            }
+
+            return bytes;
+          });
+
+        response->addHeader("Content-Disposition", String("attachment; filename=") + sdGlobalFile.name());
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+      }
+    }
+  } else {
+    request->send(428, "text/plain", "SD card busy or not initialized");
   }
-  else {
-    response->setCode(200);
-    Serial.println("SD card read fail");
-    request->send(response);
+}
+
+void handleSdDelete(AsyncWebServerRequest *request) {
+  dumpRequest(request);
+
+  AsyncResponseStream *response;
+  if (www_username != "" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+    request->requestAuthentication();
+    return;
   }
-  */
+
+  if(SD_present)
+  {
+    String path = request->url().substring(3);
+    if(0 == path.length()) {
+      request->send(405);
+      return;
+    }
+
+    // Check if the file is a directory
+    File object = SD.open(path);
+    if(object) 
+    {
+      if(object.isDirectory()) {
+        request->send(405, "text/plain", "Can not delete directories");
+      }
+      object.close();
+      SD.remove(path);
+
+      request->send(200, "text/plain", "Ok");
+    } else {
+      request->send(404, "text/plain", "Path \""+path+"\" does not exist");
+    }
+  } else {
+    request->send(428, "text/plain", "SD card busy or not initialized");
+  }
+}
+
+void handleSdPost(AsyncWebServerRequest *request) {
+  request->send(200, "text/plain", "Ok");
+}
+
+void handleSdPostBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+{
+  if(!index) {
+    DBUGF("BodyStart: %u", total);
+
+    dumpRequest(request);
+
+    AsyncResponseStream *response;
+    if (www_username != "" && !request->authenticate(www_username.c_str(), www_password.c_str())) {
+      request->requestAuthentication();
+      return;
+    }
+
+    if(SD_present)
+    {
+      String path = request->url().substring(3);
+      if(0 == path.length()) {
+        request->send(405);
+        return;
+      }
+
+      // Check if the file is a directory
+      File object = SD.open(path);
+      if(object) 
+      {
+        if(object.isDirectory()) {
+          request->send(405, "text/plain", "Can not upload to directories");
+        }
+        object.close();
+        SD.remove(path);
+      }
+
+      if(sdGlobalFileInUse) {
+        request->send(429, "text/plain", "Already downloading a file from SD, try again later");
+        return;
+      }
+      sdGlobalFile = SD.open(path, FILE_WRITE);
+      if(sdGlobalFile)
+      {
+        sdGlobalFileInUse = true;
+
+      } else {
+        request->send(500, "text/plain", "Error opening file for write");
+        return;
+      } 
+    } else {
+      request->send(428, "text/plain", "SD card busy or not initialized");
+      return;
+    }
+
+    //request->_tempObject = new String();
+  }
+
+  DBUGF("%.*s", len, (const char*)data);
+  sdGlobalFile.write((const char*)data, len);
+
+  //body->concat((const char*)data, len);
+  if(index + len == total) {
+    DBUGF("BodyEnd: %u", total);
+    sdGlobalFile.close();
+    sdGlobalFileInUse = false;
+  }
+}
 
 
 
@@ -552,8 +715,9 @@ void handleStatus(AsyncWebServerRequest *request) {
 
   s += "\"mqtt_connected\":\"" + String(mqtt_connected()) + "\",";
 
+  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\",";
 
-  s += "\"free_heap\":\"" + String(ESP.getFreeHeap()) + "\"";
+  s += "\"rtc_set\":" + String(timeConfidence ? "true" : "false");
 
 #ifdef ENABLE_LEGACY_API
   s += ",\"version\":\"" + currentfirmware + "\"";
@@ -704,6 +868,45 @@ void handleInput(AsyncWebServerRequest *request) {
   DBUGLN(input_string);
 }
 
+
+// -------------------------------------------------------------------
+// Manually set the time
+// url: /settime
+// -------------------------------------------------------------------
+void
+handleSetTime(AsyncWebServerRequest *request) {
+  AsyncResponseStream *response;
+  if (false == requestPreProcess(request, response, "text/plain")) {
+    return;
+  }
+
+  String time = request->arg("time");
+
+  struct tm tm;
+
+  int yr, mnth, d, h, m, s;
+  if(6 == sscanf( time.c_str(), "%4d-%2d-%2dT%2d:%2d:%2dZ", &yr, &mnth, &d, &h, &m, &s))
+  {
+    DateTime set_time(yr, mnth, d, h, m, s);
+    char buf[] = "YYYY-MM-DDThh:mm:ssZ";
+    DBUGF("set_time = %s", set_time.toString(buf));
+    set_rtc(set_time);
+  }
+  else
+  {
+    response->setCode(400);
+    response->print("could not parse time");
+    request->send(response);
+    return;
+  }
+
+  response->setCode(200);
+  response->print("set");
+  request->send(response);
+}
+
+
+
 // -------------------------------------------------------------------
 // Update firmware
 // url: /update
@@ -818,6 +1021,7 @@ web_server_setup()
   server.on("/saveemoncms", handleSaveEmoncms);
   server.on("/savemqtt", handleSaveMqtt);
   server.on("/saveadmin", handleSaveAdmin);
+  server.on("/settime", handleSetTime);
 
   server.on("/reset", handleRst);
   server.on("/restart", handleRestart);
@@ -829,6 +1033,10 @@ web_server_setup()
 
   server.on("/savedc", handleEmonDC);
   server.on("/download", handleDownload);
+
+  server.on("/sd*", HTTP_GET, handleSdGet);
+  server.on("/sd*", HTTP_DELETE, handleSdDelete);
+  server.on("/sd*", HTTP_POST, handleSdPost, NULL, handleSdPostBody);
 
   server.on("/upload", HTTP_POST, [](AsyncWebServerRequest * request) {
     request->send(200);
