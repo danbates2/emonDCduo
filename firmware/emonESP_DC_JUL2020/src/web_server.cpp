@@ -402,6 +402,7 @@ void handleDownload(AsyncWebServerRequest *request)
             sdGlobalFile.seek(index);
       
             size_t dataRemaining = sdGlobalFile.size() - sdGlobalFile.position();
+
             Serial.println("Data remaining:" + String(dataRemaining));
 
             uint32_t readBytes;
